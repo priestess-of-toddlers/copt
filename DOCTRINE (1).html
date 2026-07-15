@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Church of Perpetual Toddlerhood — Sacred Doctrine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Quicksand:wght@400;500;600;700&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream: #fff8f0;
+    --pink-soft: #ffd7e8;
+    --pink-mid: #ff9fc4;
+    --pink-deep: #e8608f;
+    --lavender: #e6defc;
+    --lavender-deep: #b6a3e8;
+    --lavender-darker: #8a6fc4;
+    --mint: #cdf2e2;
+    --mint-deep: #7ed6b1;
+    --butter: #fff2c2;
+    --butter-deep: #f4c95d;
+    --brown-text: #6b4a3f;
+    --brown-soft: #a9877a;
+    --shadow-soft: 0 8px 24px rgba(232,96,143,0.15);
+    --shadow-lav: 0 8px 24px rgba(182,163,232,0.22);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background:
+      radial-gradient(circle at 10% 10%, var(--pink-soft) 0%, transparent 35%),
+      radial-gradient(circle at 90% 20%, var(--lavender) 0%, transparent 35%),
+      radial-gradient(circle at 15% 85%, var(--mint) 0%, transparent 35%),
+      radial-gradient(circle at 90% 90%, var(--butter) 0%, transparent 35%),
+      var(--cream);
+    font-family: 'Quicksand', sans-serif;
+    color: var(--brown-text);
+    line-height: 1.7;
+    min-height: 100vh;
+  }
+
+  .cloud-bg {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.5;
+    background-image:
+      radial-gradient(circle, #ffffffaa 20%, transparent 21%),
+      radial-gradient(circle, #ffffffaa 20%, transparent 21%);
+    background-size: 220px 220px;
+    background-position: 0 0, 110px 130px;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 60px 24px 100px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 50px;
+  }
+
+  .crown-icon {
+    font-size: 3rem;
+    display: block;
+    margin-bottom: 10px;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));
+  }
+
+  h1 {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 2.6rem;
+    color: var(--pink-deep);
+    margin: 0 0 6px;
+    text-shadow: 2px 2px 0 #fff, 4px 4px 8px rgba(232,96,143,0.2);
+    letter-spacing: 0.5px;
+  }
+
+  .subtitle {
+    font-family: 'Caveat', cursive;
+    font-size: 1.7rem;
+    color: var(--lavender-deep);
+    margin: 0 0 30px;
+  }
+
+  .quote-block {
+    background: #ffffffcc;
+    border: 3px dashed var(--pink-mid);
+    border-radius: 24px;
+    padding: 24px 30px;
+    margin: 30px auto;
+    max-width: 620px;
+    box-shadow: var(--shadow-soft);
+    font-family: 'Caveat', cursive;
+    font-size: 1.5rem;
+    color: var(--pink-deep);
+  }
+  .quote-block cite {
+    display: block;
+    font-family: 'Quicksand', sans-serif;
+    font-size: 0.95rem;
+    font-style: normal;
+    color: var(--brown-soft);
+    margin-top: 10px;
+    font-weight: 600;
+  }
+
+  .divider {
+    text-align: center;
+    font-size: 1.4rem;
+    margin: 40px 0;
+    color: var(--pink-mid);
+    letter-spacing: 12px;
+  }
+
+  .divider.lav {
+    color: var(--lavender-deep);
+  }
+
+  section.card {
+    background: #ffffffe6;
+    border-radius: 28px;
+    padding: 30px 34px;
+    margin-bottom: 34px;
+    box-shadow: var(--shadow-soft);
+    border: 2px solid #ffffff;
+    position: relative;
+    overflow: hidden;
+  }
+
+  section.card::before {
+    content: "";
+    position: absolute;
+    top: -30px;
+    right: -30px;
+    width: 100px;
+    height: 100px;
+    background: radial-gradient(circle, var(--butter) 0%, transparent 70%);
+    opacity: 0.7;
+  }
+
+  .preamble h2, .commandments-title {
+    font-family: 'Fredoka', sans-serif;
+    color: var(--lavender-deep);
+    font-size: 1.5rem;
+    margin-top: 0;
+  }
+
+  .commandments-title {
+    text-align: center;
+    font-size: 2rem;
+    color: var(--pink-deep);
+    margin: 60px 0 30px;
+  }
+
+  /* ── Ten Commandments ── */
+  .commandment {
+    background: #ffffffea;
+    border-radius: 26px;
+    padding: 28px 32px;
+    margin-bottom: 26px;
+    box-shadow: var(--shadow-soft);
+    border-left: 8px solid var(--pink-mid);
+    position: relative;
+    transition: transform 0.2s ease;
+  }
+  .commandment:hover { transform: translateY(-3px); }
+  .commandment:nth-child(odd)  { border-left-color: var(--lavender-deep); }
+  .commandment:nth-child(3n)   { border-left-color: var(--mint-deep); }
+  .commandment:nth-child(4n)   { border-left-color: var(--butter-deep); }
+
+  .num-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--pink-soft), var(--pink-mid));
+    color: #fff;
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 700;
+    font-size: 1.3rem;
+    box-shadow: 0 4px 10px rgba(232,96,143,0.35);
+    margin-right: 14px;
+    flex-shrink: 0;
+  }
+
+  .commandment-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .commandment-title {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 1.25rem;
+    color: var(--brown-text);
+  }
+  .commandment-title .clause-name {
+    display: block;
+    font-family: 'Caveat', cursive;
+    font-size: 1.15rem;
+    color: var(--pink-deep);
+    font-weight: 600;
+  }
+
+  .commandment p { margin: 0; font-size: 1.02rem; }
+  .commandment p em     { color: var(--pink-deep); font-style: italic; }
+  .commandment p strong { color: var(--lavender-deep); }
+
+  /* ── Caregiver's Codex section wrapper ── */
+  .codex-wrapper {
+    margin-top: 70px;
+    background: linear-gradient(160deg, #f3eeff 0%, #fff8f0 100%);
+    border-radius: 36px;
+    padding: 40px 34px 50px;
+    box-shadow: var(--shadow-lav);
+    border: 2px solid var(--lavender);
+    position: relative;
+    overflow: hidden;
+  }
+  .codex-wrapper::before {
+    content: "";
+    position: absolute;
+    top: -40px; left: -40px;
+    width: 160px; height: 160px;
+    background: radial-gradient(circle, var(--lavender) 0%, transparent 70%);
+    opacity: 0.5;
+  }
+  .codex-wrapper::after {
+    content: "";
+    position: absolute;
+    bottom: -40px; right: -40px;
+    width: 160px; height: 160px;
+    background: radial-gradient(circle, var(--mint) 0%, transparent 70%);
+    opacity: 0.4;
+  }
+
+  .codex-title {
+    text-align: center;
+    font-family: 'Fredoka', sans-serif;
+    font-size: 2rem;
+    color: var(--lavender-darker);
+    margin: 0 0 6px;
+    position: relative; z-index: 1;
+    text-shadow: 2px 2px 0 #fff;
+  }
+  .codex-subtitle {
+    text-align: center;
+    font-family: 'Caveat', cursive;
+    font-size: 1.5rem;
+    color: var(--lavender-deep);
+    margin: 0 0 24px;
+    position: relative; z-index: 1;
+  }
+  .codex-intro {
+    background: #ffffffcc;
+    border: 3px dashed var(--lavender-deep);
+    border-radius: 20px;
+    padding: 20px 26px;
+    margin-bottom: 34px;
+    font-size: 1.02rem;
+    position: relative; z-index: 1;
+    line-height: 1.75;
+  }
+
+  /* ── Codex tenet cards ── */
+  .tenet {
+    background: #ffffffea;
+    border-radius: 26px;
+    padding: 28px 32px;
+    margin-bottom: 22px;
+    box-shadow: var(--shadow-lav);
+    border-left: 8px solid var(--lavender-deep);
+    position: relative; z-index: 1;
+    transition: transform 0.2s ease;
+  }
+  .tenet:hover { transform: translateY(-3px); }
+  .tenet:nth-child(odd)  { border-left-color: var(--lavender-darker); }
+  .tenet:nth-child(3n)   { border-left-color: var(--mint-deep); }
+  .tenet:nth-child(4n)   { border-left-color: var(--butter-deep); }
+
+  .tenet-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--lavender), var(--lavender-deep));
+    color: #fff;
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 700;
+    font-size: 1.3rem;
+    box-shadow: 0 4px 10px rgba(182,163,232,0.45);
+    margin-right: 14px;
+    flex-shrink: 0;
+  }
+
+  .tenet-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .tenet-title {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 1.25rem;
+    color: var(--brown-text);
+  }
+  .tenet-title .tenet-clause {
+    display: block;
+    font-family: 'Caveat', cursive;
+    font-size: 1.15rem;
+    color: var(--lavender-darker);
+    font-weight: 600;
+  }
+
+  .tenet p { margin: 0; font-size: 1.02rem; }
+  .tenet p em     { color: var(--lavender-darker); font-style: italic; }
+  .tenet p strong { color: var(--pink-deep); }
+
+  /* ── Shared thesis box ── */
+  .thesis-box {
+    text-align: center;
+    background: linear-gradient(135deg, var(--butter) 0%, var(--pink-soft) 60%, var(--lavender) 100%);
+    border-radius: 28px;
+    padding: 40px 30px;
+    margin: 60px 0 40px;
+    box-shadow: var(--shadow-soft);
+  }
+  .thesis-box h2 {
+    font-family: 'Fredoka', sans-serif;
+    color: var(--pink-deep);
+    margin-top: 0;
+  }
+  .thesis-box p {
+    font-family: 'Caveat', cursive;
+    font-size: 1.6rem;
+    color: var(--brown-text);
+    margin: 0;
+    line-height: 2;
+  }
+
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 30px;
+  }
+  @media (max-width: 600px) {
+    .footer-grid { grid-template-columns: 1fr; }
+    h1 { font-size: 2rem; }
+    .codex-title { font-size: 1.6rem; }
+  }
+
+  .mini-card {
+    background: #ffffffcc;
+    border-radius: 20px;
+    padding: 22px 24px;
+    box-shadow: var(--shadow-soft);
+  }
+  .mini-card h3 {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 1.1rem;
+    color: var(--lavender-deep);
+    margin-top: 0;
+  }
+  .mini-card p { font-size: 0.95rem; margin-bottom: 0; }
+
+  footer.final {
+    text-align: center;
+    margin-top: 60px;
+    font-family: 'Caveat', cursive;
+    font-size: 1.3rem;
+    color: var(--brown-soft);
+  }
+
+  .paw-row {
+    text-align: center;
+    font-size: 1.5rem;
+    margin: 50px 0 20px;
+    opacity: 0.8;
+  }
+</style>
+</head>
+<body>
+<div class="cloud-bg"></div>
+<div class="container">
+
+  <!-- ══ HEADER ══ -->
+  <header>
+    <span class="crown-icon">🧸👑🍼</span>
+    <h1>The Church of Perpetual Toddlerhood</h1>
+    <p class="subtitle">~ An Open Source Religion ~</p>
+    <div class="quote-block">
+      "No one is going to hand you that cookie. Pull your own chair over, climb on it, and get that cookie for yourself."
+      <cite>— The Cookie Doctrine, Commandment II</cite>
+    </div>
+  </header>
+
+  <!-- ══ PREAMBLE ══ -->
+  <section class="card preamble">
+    <h2>📜 Preamble</h2>
+    <p>This is an open-source religion. Doctrine changes go through pull requests. Schisms are forks. Heresy is an unresolved merge conflict. Anyone may propose a new Commandment; consensus of the Council of Founders (currently: one (1) tired tyke) is required for canonization.</p>
+    <p>The Church of Perpetual Toddlerhood rejects <strong>adulthood</strong> — the drudgery, the joylessness, the performative "having it together." It does <strong>not</strong> reject responsibility, ambition, or growth. This is not a doctrine of helplessness. It is a doctrine of softness <em>with</em> a spine.</p>
+    <p>You may keep your bottle. You may keep your blankie. You must also keep climbing.</p>
+  </section>
+
+  <div class="divider">🍼 ✦ 🧸 ✦ 🍼</div>
+
+  <!-- ══ TEN COMMANDMENTS ══ -->
+  <h2 class="commandments-title">The Ten Commandments</h2>
+
+  <div class="commandment">
+    <div class="commandment-header">
+      <span class="num-badge">I</span>
+      <div class="commandment-title">Reject Adulthood</div>
+    </div>
+    <p>Cast off the drudgery, the grayness, the pretending-to-have-it-together theater that so many mistake for maturity. Adulthood, as commonly practiced, is optional. Responsibility is not. Tell the difference.</p>
+  </div>
+
+  <div class="commandment">
+    <div class="commandment-header">
+      <span class="num-badge">II</span>
+      <div class="commandment-title">The Cookie Doctrine<span class="clause-name">"Pull your chair, climb, and earn it"</span></div>
+    </div>
+    <p><em>No one is going to hand you that cookie. Pull your own chair over, climb on it, and get that cookie for yourself.</em> Self-sufficiency is sacred. Wanting comfort is not the same as expecting to be served. Earn what you want. Nobody is coming to do it for you, and that's fine — you were always going to be the one to do it anyway.</p>
+  </div>
+
+  <div class="commandment">
+    <div class="commandment-header">
+      <span class="num-badge">III</span>
+      <div class="commandment-title">Comfort Is Earned, Not Substituted</div>
+    </div>
+    <p>Stuffies, bottles, blankets, dinos — all holy relics, all welcome in this Church. But comfort items are the <strong>reward</strong> for a day of effort, never the excuse to avoid putting in the effort at all. Softness is a landing pad, not a hiding place.</p>
+  </div>
+
+  <div class="commandment">
+    <div class="commandment-header">
+      <span class="num-badge">IV</span>
+      <div class="commandment-title">The Nursery Clause<span class="clause-name">Own your mess</span></div>
+    </div>
+    <p>Keep your messes in your own nursery. Own your problems. Clean up after yourself — emotionally, literally, spiritually. Do not track your bad day through someone else's clean floor.</p>
+  </div>
+
+  <div class="commandment">
+    <div class="commandment-header">
+      <span class="num-badge">V</span>
+      <div class="commandment-title">The Tantrum Clause<span class="clause-name">Flop, then rise</span></div>
+    </div>
+    <p>Tantrums solve nothing, even though they can feel <em>incredible</em> in the moment. Feel the feelings. Flop dramatically onto the floor if you must. Cry, stamp, whine, get it out of your system — then get up and push through. The flop is a pit stop, never a parking spot.</p>
+  </div>
+
+  <div class="commandment">
+    <div class="commandment-header">
+      <span class="num-badge">VI</span>
+      <div class="commandment-title">The Nap Clause<span class="clause-name">Rest is maintenance</span></div>
+    </div>
+    <p>Naps are non-optional. Even the most dedicated little crawler tires out chasing their toys. Pushing past your healthy limits only ends in tears. Rest is not surrender — it's maintenance. Toddle back when you're ready, not before.</p>
+  </div>
+
+  <div class="commandment">
+    <div class="commandment-header">
+      <span class="num-badge">VII</span>
+      <div class="commandment-title">The Veggie Clause<span class="clause-name">Balance pleasure with growth</span></div>
+    </div>
+    <p>Too many sweets lead to tummy aches. Eat your vegetables, literally and figuratively. Do not fill your life with pleasure alone — season it with genuine self-care and the kind of challenge that makes you grow. A diet of only dessert eventually makes you sick.</p>
+  </div>
+
+  <div class="commandment">
+    <div class="commandment-header">
+      <span class="num-badge">VIII</span>
+      <div class="commandment-title">The Playpen Clause<span class="clause-name">Inspiration, not envy</span></div>
+    </div>
+    <p>The toys in someone else's playpen aren't always better — but don't be afraid to peek in anyway. Learn from what others have built. Let it inspire, never let it curdle into envy. Take the knowledge. Leave the resentment at the gate.</p>
+  </div>
+
+  <div class="commandment">
+    <div class="commandment-header">
+      <span class="num-badge">IX</span>
+      <div class="commandment-title">The Sharing Clause<span class="clause-name">Boundaries and warmth, together</span></div>
+    </div>
+    <p>Every baby has their own feelings, and they are all worth taking into account. Share your toys. Keep your nursery door open. Boundaries (Commandment IV) and warmth (Commandment IX) are not in conflict — they are two hands holding the same thing.</p>
+  </div>
+
+  <div class="commandment">
+    <div class="commandment-header">
+      <span class="num-badge">X</span>
+      <div class="commandment-title">The Comfort Clause<span class="clause-name">No judgment, ever</span></div>
+    </div>
+    <p>Everyone has their own way of relaxing, and this Church is not in the business of judgment. Hug your stuffie, suck your thumb, nurse your toes, whatever soothes you — so long as it harms no one. Never tell another tyke how to relax. This Commandment closes the circle: everything above is a framework for growth, but growth without gentleness toward yourself and others isn't doctrine, it's just adulthood in a onesie.</p>
+  </div>
+
+  <!-- ══ CAREGIVER'S CODEX ══ -->
+  <div class="divider lav">🍼 ✦ 🤍 ✦ 🍼</div>
+
+  <div class="codex-wrapper">
+    <h2 class="codex-title">🤍 The Caregiver's Codex</h2>
+    <p class="codex-subtitle">~ On Those Who Hold the Bottle ~</p>
+
+    <div class="codex-intro">
+      <p>The Ten Commandments were written for the toddler looking inward. But a congregation grows, and not everyone who walks through the nursery door is here to climb into the playpen themselves. Some are here to kneel beside it.</p>
+      <p>This Codex is not a rewrite of the Ten. It is not law laid down <em>for</em> adults by someone who swore off being one. It is an <strong>invitation</strong> — a parallel set of vows for anyone who takes on the role of Caregiver within this Church, offered in the same spirit as the rest of this doctrine: open-source, non-binding until embraced, and always subject to a good pull request.</p>
+    </div>
+
+    <div class="tenet">
+      <div class="tenet-header">
+        <span class="tenet-badge">I</span>
+        <div class="tenet-title">You Are Not Above the Doctrine, You Are Beside It</div>
+      </div>
+      <p>A Caregiver isn't exempt from Commandments I–X — you still reject drudgery, still earn your own cookies, still nap, still cry when you need to. You just <em>also</em> hold space for someone else's. Two people can be little and big under the same roof; nobody outranks the doctrine.</p>
+    </div>
+
+    <div class="tenet">
+      <div class="tenet-header">
+        <span class="tenet-badge">II</span>
+        <div class="tenet-title">The Playpen Is Not a Cage You Built to Control<span class="tenet-clause">Be the net, not the ceiling</span></div>
+      </div>
+      <p>Your job is to make the climbing safe, not to prevent the climbing. If "helping" starts looking like keeping someone small so you feel needed, that's not care, that's a leash with a bow on it. Growth still applies to the person in your care — you're the net, not the ceiling.</p>
+    </div>
+
+    <div class="tenet">
+      <div class="tenet-header">
+        <span class="tenet-badge">III</span>
+        <div class="tenet-title">Consent Is the Only Real Bottle<span class="tenet-clause">Ask before you rearrange the furniture</span></div>
+      </div>
+      <p>Nothing about this dynamic works without clear, ongoing, enthusiastic agreement from the toddler on what care looks like for <em>them</em> specifically. No assuming, no "I know what's best" without asking. Every littlespace is furnished differently, and you don't rearrange the furniture without being invited in first.</p>
+    </div>
+
+    <div class="tenet">
+      <div class="tenet-header">
+        <span class="tenet-badge">IV</span>
+        <div class="tenet-title">Your Own Cup Fills First<span class="tenet-clause">A depleted Caregiver helps no one</span></div>
+      </div>
+      <p>You cannot pour comfort from an empty bottle. Caregivers get worn out, touched out, tired out — and Commandment VI (rest) applies to you doubly, because you're covering two people's tanks, not one. A depleted Caregiver helps no one, least of all themselves. Put your own oxygen mask on first; this is not selfishness, it's maintenance.</p>
+    </div>
+
+    <div class="tenet">
+      <div class="tenet-header">
+        <span class="tenet-badge">V</span>
+        <div class="tenet-title">Praise the Climb, Not Just the Cookie<span class="tenet-clause">Notice the small unglamorous wins</span></div>
+      </div>
+      <p>It is easy to only show up for the tantrums and the tears. A good Caregiver notices the small, unglamorous wins too — the chair pulled over, the first shaky step up onto it — and says so out loud. <strong>Attention given only to distress teaches that distress is the only thing worth noticing.</strong> Don't teach that lesson.</p>
+    </div>
+
+    <div class="tenet">
+      <div class="tenet-header">
+        <span class="tenet-badge">VI</span>
+        <div class="tenet-title">No Judgment Flows Both Directions<span class="tenet-clause">Your comfort counts too</span></div>
+      </div>
+      <p>Commandment X says never tell another tyke how to relax — that applies to you too. Your comfort as a Caregiver (whatever that looks like for you, however you decompress or recharge) deserves the same zero-judgment protection the littles get. You are not required to have it all together just because you're the one holding the bottle.</p>
+    </div>
+
+    <div class="tenet">
+      <div class="tenet-header">
+        <span class="tenet-badge">VII</span>
+        <div class="tenet-title">One Congregation, Two Pews<span class="tenet-clause">Neither role outranks the other</span></div>
+      </div>
+      <p>The toddler and the Caregiver are not opposing ranks. They are two seats at the same table, two roles in the same Church, each necessary and neither superior. A Church that only honors the ones climbing, and never the ones steadying the ladder, is missing half its own doctrine.</p>
+    </div>
+
+  </div><!-- end .codex-wrapper -->
+
+  <!-- ══ SHARED THESIS ══ -->
+  <div class="paw-row">🐾 🧸 🤍 🍼 🤍 🧸 🐾</div>
+
+  <div class="thesis-box">
+    <h2>🍪 Core Thesis</h2>
+    <p>
+      Grow. Earn. Rest. Feel. Share.<br>
+      Hold, when asked. Steady, without smothering.<br>
+      Never let anyone — toddler or Caregiver —<br>tell you that softness and ambition can't share a crib.
+    </p>
+  </div>
+
+  <!-- ══ FOOTER CARDS ══ -->
+  <div class="footer-grid">
+    <div class="mini-card">
+      <h3>📄 License</h3>
+      <p>Released under the <strong>MIT-But-Make-It-Milk (MBMIM) License</strong>. Fork freely. All derivative doctrines must remain open, gentle, and at least 10% ridiculous.</p>
+    </div>
+    <div class="mini-card">
+      <h3>🤝 Contributing</h3>
+      <p>Open a PR. Propose your amendment. The Council of Founders will flop dramatically on the floor about it before eventually, begrudgingly, merging.</p>
+    </div>
+  </div>
+
+  <footer class="final">
+    Established via Discord DM, somewhere past midnight,<br>
+    by a Founder who really should have been asleep three commandments ago (see: Commandment VI). 🍼
+  </footer>
+
+</div>
+</body>
+</html>
