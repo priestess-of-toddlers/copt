@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Shape Sorter</title>
+<style>
+  :root{ --bg1:#eaf6f4; --bg2:#d6efe9; --ink:#33413f; }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    font-family:"Baloo 2","Nunito",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:radial-gradient(120% 120% at 50% 0%, var(--bg1), var(--bg2));
+    color:var(--ink);
+    display:flex;align-items:center;justify-content:center;min-height:100%;padding:12px;
+  }
+  .game-wrap{width:min(94vw,500px);display:flex;flex-direction:column;align-items:center;user-select:none;}
+  h1{font-size:clamp(20px,5vw,30px);margin:0 0 2px;letter-spacing:.5px;font-weight:800;}
+  .hint{margin:0 0 8px;font-size:clamp(12px,3.2vw,15px);opacity:.75;text-align:center;min-height:1.2em;transition:color .2s;}
+  .hint.bad{color:#e0492f;font-weight:700;opacity:1;}
+  .hint.good{color:#2fa14f;font-weight:700;opacity:1;}
+  .stage-holder{position:relative;width:100%;}
+  svg.stage{width:100%;height:auto;display:block;touch-action:none;overflow:visible;}
+  .block{cursor:grab;transition:transform .3s cubic-bezier(.34,1.56,.64,1);}
+  .block.grabbing{cursor:grabbing;transition:none;}
+  .block.dropping{transition:transform .32s ease-in, opacity .32s ease-in;}
+  .block,.block *{-webkit-user-drag:none;}
+  .controls{margin-top:10px;display:flex;gap:10px;align-items:center;}
+  button{font:inherit;font-weight:800;border:none;border-radius:999px;padding:9px 18px;
+    background:#ff8a5c;color:#fff;box-shadow:0 4px 0 #d96a40,0 6px 14px rgba(217,106,64,.35);
+    cursor:pointer;transition:transform .08s,box-shadow .08s;}
+  button:active{transform:translateY(3px);box-shadow:0 1px 0 #d96a40,0 3px 8px rgba(217,106,64,.35);}
+  button.ghost{background:#fff;color:var(--ink);box-shadow:0 4px 0 #dfe9e7,0 6px 14px rgba(0,0,0,.06);}
+  button.ghost:active{box-shadow:0 1px 0 #dfe9e7;}
+  .banner{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity .35s;}
+  .banner.show{opacity:1;}
+  .banner .card{background:#fff;border-radius:22px;padding:18px 26px;text-align:center;box-shadow:0 12px 34px rgba(0,0,0,.18);
+    transform:scale(.6);transition:transform .45s cubic-bezier(.34,1.56,.64,1);}
+  .banner.show .card{transform:scale(1);}
+  .banner .card .big{font-size:34px;}
+  .banner .card .txt{font-weight:800;font-size:20px;margin-top:4px;}
+  .confetti{position:absolute;top:0;left:0;pointer-events:none;will-change:transform,opacity;}
+  @keyframes fall{0%{transform:translateY(-10px) rotate(0);opacity:1;}100%{transform:translateY(420px) rotate(540deg);opacity:0;}}
+  @keyframes shake{0%,100%{transform:translateX(0);}20%{transform:translateX(-6px);}40%{transform:translateX(6px);}60%{transform:translateX(-4px);}80%{transform:translateX(4px);}}
+  .shake{animation:shake .4s;}
+</style>
+</head>
+<body>
+  <div class="game-wrap">
+    <h1>🧩 Shape Sorter</h1>
+    <p class="hint" id="hint">Drag each block to its matching hole.</p>
+    <div class="stage-holder">
+      <svg class="stage" id="stage" viewBox="0 0 480 560" aria-label="Shape sorter toy"></svg>
+      <div class="banner" id="banner">
+        <div class="card"><div class="big">🎉🥳🎉</div><div class="txt">All sorted!</div></div>
+      </div>
+    </div>
+    <div class="controls">
+      <button id="reset" class="ghost">↺ Reset</button>
+      <button id="mute" class="ghost" title="Toggle sound">🔊</button>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const SVGNS="http://www.w3.org/2000/svg";
+  const stage=document.getElementById('stage');
+  const hintEl=document.getElementById('hint');
+  const banner=document.getElementById('banner');
+  const VIEW_W=480, VIEW_H=560;
+
+  // ---- box + hole colours ----
+  const BOX_TOP='#5ec8c0', BOX_FRONT='#48aaa3', BOX_SIDE='#3a8a84';
+  const HOLE_FILL='#1d3d3a';
+  const PERSP=0.66;                 // vertical squash for shapes lying on the lid
+  const HOLE_R=30, BLOCK_R=26, DEPTH=7;
+
+  // ---- helpers ----
+  function make(tag,attrs){const el=document.createElementNS(SVGNS,tag);for(const k in attrs)el.setAttribute(k,attrs[k]);return el;}
+  function shade(hex,f){const n=parseInt(hex.slice(1),16);let r=(n>>16)&255,g=(n>>8)&255,b=n&255;
+    r=Math.max(0,Math.min(255,Math.round(r*f)));g=Math.max(0,Math.min(255,Math.round(g*f)));b=Math.max(0,Math.min(255,Math.round(b*f)));
+    return `rgb(${r},${g},${b})`;}
+  function shuffle(a){for(let i=a.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[a[i],a[j]]=[a[j],a[i]];}return a;}
+  const D2R=Math.PI/180;
+  function polyPts(n,r,rot){const p=[];for(let i=0;i<n;i++){const a=(rot+i*360/n)*D2R;p.push([r*Math.cos(a),r*Math.sin(a)]);}return p;}
+  function starPts(n,ro,ri,rot){const p=[];for(let i=0;i<2*n;i++){const rr=i%2?ri:ro;const a=(rot+i*180/n)*D2R;p.push([rr*Math.cos(a),rr*Math.sin(a)]);}return p;}
+  function ptsPath(p){return 'M '+p.map(q=>q[0].toFixed(2)+' '+q[1].toFixed(2)).join(' L ')+' Z';}
+  function heartPath(r){const s=r*1.12;return `M 0 ${0.72*s} C ${-0.62*s} ${0.30*s} ${-1.02*s} ${-0.02*s} ${-1.02*s} ${-0.40*s}`
+    +` C ${-1.02*s} ${-0.74*s} ${-0.54*s} ${-0.88*s} 0 ${-0.48*s} C ${0.54*s} ${-0.88*s} ${1.02*s} ${-0.74*s} ${1.02*s} ${-0.40*s}`
+    +` C ${1.02*s} ${-0.02*s} ${0.62*s} ${0.30*s} 0 ${0.72*s} Z`;}
+  function shapePath(type,r){
+    switch(type){
+      case 'circle':   return `M ${-r} 0 a ${r} ${r} 0 1 0 ${2*r} 0 a ${r} ${r} 0 1 0 ${-2*r} 0 Z`;
+      case 'square':   return ptsPath(polyPts(4,r*1.18,45));
+      case 'triangle': return ptsPath(polyPts(3,r*1.16,-90));
+      case 'hexagon':  return ptsPath(polyPts(6,r*1.08,0));
+      case 'star':     return ptsPath(starPts(5,r*1.22,r*0.54,-90));
+      case 'heart':    return heartPath(r);
+    }
+  }
+
+  // ---- shapes / colours ----
+  const SHAPES=[
+    {type:'circle',   color:'#ef5350'},
+    {type:'square',   color:'#42a5f5'},
+    {type:'triangle', color:'#66bb6a'},
+    {type:'star',     color:'#ffca28'},
+    {type:'hexagon',  color:'#ab47bc'},
+    {type:'heart',    color:'#ec407a'},
+  ];
+  const colorOf=t=>SHAPES.find(s=>s.type===t).color;
+  // hole positions on the lid (back row higher/narrower for perspective)
+  const HOLE_SLOTS=[
+    {type:'circle',   x:170,y:196},{type:'star',    x:240,y:191},{type:'hexagon', x:310,y:196},
+    {type:'square',   x:158,y:233},{type:'triangle',x:240,y:238},{type:'heart',   x:322,y:233},
+  ];
+  const HOMES=[{x:112,y:420},{x:240,y:420},{x:368,y:420},{x:112,y:502},{x:240,y:502},{x:368,y:502}];
+
+  // ---- build the box ----
+  const defs=make('defs');
+  defs.innerHTML=`
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="200%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.16"/></filter>`;
+  stage.appendChild(defs);
+
+  const boxG=make('g');
+  // ground shadow
+  boxG.appendChild(make('ellipse',{cx:240,cy:352,rx:180,ry:30,fill:'#000',opacity:0.08}));
+  // right side wall
+  boxG.appendChild(make('path',{d:'M 368 252 L 330 168 L 330 262 L 368 346 Z',fill:BOX_SIDE}));
+  // front wall
+  boxG.appendChild(make('path',{d:'M 112 252 L 368 252 L 368 346 Q 368 356 358 356 L 122 356 Q 112 356 112 346 Z',
+                                fill:BOX_FRONT}));
+  boxG.appendChild(make('path',{d:'M 120 300 L 360 300',stroke:shade(BOX_FRONT,0.9),'stroke-width':2,opacity:0.25}));
+  // top lid (trapezoid), rounded via round joins
+  boxG.appendChild(make('path',{d:'M 112 252 L 150 168 L 330 168 L 368 252 Z',fill:BOX_TOP,
+                                stroke:BOX_TOP,'stroke-width':10,'stroke-linejoin':'round'}));
+  boxG.appendChild(make('path',{d:'M 150 168 L 330 168',stroke:shade(BOX_TOP,1.12),'stroke-width':2,opacity:0.6}));
+  stage.appendChild(boxG);
+
+  // ---- holes ----
+  const holesG=make('g');
+  stage.appendChild(holesG);
+  const holes=HOLE_SLOTS.map(slot=>{
+    const g=make('g',{transform:`translate(${slot.x},${slot.y}) scale(1,${PERSP})`});
+    const d=shapePath(slot.type,HOLE_R), sw=HOLE_R*0.14;
+    g.appendChild(make('path',{d:d,fill:HOLE_FILL,stroke:HOLE_FILL,'stroke-width':sw,'stroke-linejoin':'round','stroke-linecap':'round'}));
+    // faint inner depth + front-lip light
+    g.appendChild(make('path',{d:d,fill:'none',stroke:'#000','stroke-width':2,opacity:0.25,'stroke-linejoin':'round'}));
+    holesG.appendChild(g);
+    return {type:slot.type,cx:slot.x,cy:slot.y,node:g,filled:false};
+  });
+
+  // ---- blocks ----
+  const blocksG=make('g');
+  stage.appendChild(blocksG);
+  function buildBlock(type,color){
+    const g=make('g',{class:'block'});
+    const d=shapePath(type,BLOCK_R), sw=BLOCK_R*0.16;
+    const common={'stroke-width':sw,'stroke-linejoin':'round','stroke-linecap':'round'};
+    // 3D underside
+    g.appendChild(make('path',Object.assign({d:d,transform:`translate(0,${DEPTH})`,fill:shade(color,0.6),stroke:shade(color,0.6)},common)));
+    // top face
+    g.appendChild(make('path',Object.assign({d:d,fill:color,stroke:color,filter:'url(#soft)'},common)));
+    // soft highlight
+    g.appendChild(make('ellipse',{cx:-BLOCK_R*0.32,cy:-BLOCK_R*0.34,rx:BLOCK_R*0.4,ry:BLOCK_R*0.24,fill:'#fff',opacity:0.28}));
+    // hit area
+    g.appendChild(make('circle',{cx:0,cy:0,r:BLOCK_R*1.35,fill:'none','pointer-events':'all'}));
+    return g;
+  }
+  const trayOrder=shuffle(SHAPES.map((_,i)=>i));
+  const blocks=SHAPES.map((s,i)=>{
+    const node=buildBlock(s.type,s.color);
+    const b={type:s.type,color:s.color,node,state:'tray',cx:0,cy:0,home:HOMES[trayOrder.indexOf(i)]};
+    node.addEventListener('pointerdown',e=>onDown(e,b));
+    blocksG.appendChild(node);
+    return b;
+  });
+
+  // ---- layout ----
+  function setT(b){b.node.style.transform=`translate(${b.cx}px, ${b.cy}px)`;}
+  function layout(){
+    blocks.filter(b=>b.state==='tray').forEach(b=>{b.cx=b.home.x;b.cy=b.home.y;});
+    blocks.forEach(b=>{if(b!==dragging&&b.state!=='placed')setT(b);});
+    // dragged block on top
+    blocks.filter(b=>b.state==='dragging').forEach(b=>blocksG.appendChild(b.node));
+  }
+
+  // ---- dragging ----
+  let dragging=null,grabDX=0,grabDY=0;
+  function toSvg(e){const p=stage.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(stage.getScreenCTM().inverse());}
+  function onDown(e,b){
+    if(dragging||b.state==='placed')return;
+    e.preventDefault();
+    dragging=b;b.state='dragging';b.node.classList.add('grabbing');b.node.classList.remove('shake');
+    const p=toSvg(e);grabDX=b.cx-p.x;grabDY=b.cy-p.y;
+    blocksG.appendChild(b.node);
+    window.addEventListener('pointermove',onMove);
+    window.addEventListener('pointerup',onUp);
+    window.addEventListener('pointercancel',onUp);
+  }
+  function onMove(e){
+    if(!dragging)return;
+    const p=toSvg(e);
+    dragging.cx=Math.max(16,Math.min(VIEW_W-16,p.x+grabDX));
+    dragging.cy=Math.max(16,Math.min(VIEW_H-16,p.y+grabDY));
+    setT(dragging);
+  }
+  function onUp(){
+    if(!dragging)return;
+    const b=dragging;
+    window.removeEventListener('pointermove',onMove);
+    window.removeEventListener('pointerup',onUp);
+    window.removeEventListener('pointercancel',onUp);
+    b.node.classList.remove('grabbing');
+    // nearest unfilled hole
+    let best=null,bestD=1e9;
+    holes.forEach(h=>{if(h.filled)return;const dx=b.cx-h.cx,dy=b.cy-h.cy,d=Math.hypot(dx,dy);if(d<bestD){bestD=d;best=h;}});
+    dragging=null;
+    if(best && bestD<64 && best.type===b.type){ dropIn(b,best); return; }
+    if(best && bestD<64){ /* wrong hole */ sfx('bad'); flashHint('Not that one — find the matching shape!'); b.node.classList.add('shake'); }
+    b.state='tray';layout();
+  }
+
+  function dropIn(b,h){
+    h.filled=true;
+    b.state='placed';
+    // fill the hole with the block colour (looks like it settled in)
+    const d=shapePath(b.type,HOLE_R*0.86);
+    h.node.appendChild(make('path',{d:d,fill:b.color,stroke:shade(b.color,0.85),'stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round'}));
+    // animate the block into the hole
+    b.node.classList.add('dropping');
+    b.node.style.transformOrigin=`${b.cx}px ${b.cy}px`;
+    b.node.style.transform=`translate(${h.cx}px, ${h.cy}px) scale(0.5)`;
+    b.node.style.opacity='0';
+    sfx('plunk');
+    setTimeout(()=>{b.node.style.display='none';},340);
+    setHint(baseHint());
+    if(holes.every(x=>x.filled)) win();
+  }
+
+  // ---- hints / win ----
+  function remaining(){return blocks.filter(b=>b.state!=='placed').length;}
+  function baseHint(){const left=remaining();
+    if(left===blocks.length)return 'Drag each block to its matching hole!';
+    if(left===0)return 'All sorted!';
+    return `${blocks.length-left} in — ${left} to go!`;}
+  function setHint(t,cls){hintEl.textContent=t;hintEl.className='hint'+(cls?' '+cls:'');}
+  let hintTimer=null;
+  function flashHint(t){clearTimeout(hintTimer);setHint(t,'bad');hintTimer=setTimeout(()=>setHint(baseHint()),1600);}
+  function win(){setHint('You sorted them all! 🎉','good');banner.classList.add('show');sfx('win');confetti();}
+  function confetti(){
+    const holder=document.querySelector('.stage-holder');
+    const emo=['🎉','⭐','🟦','🔺','💜','💗','🟡','🎊'];
+    for(let i=0;i<30;i++){const s=document.createElement('div');s.className='confetti';
+      s.textContent=emo[(Math.random()*emo.length)|0];
+      s.style.left=(Math.random()*100)+'%';s.style.top='0';
+      s.style.animation=`fall ${1.4+Math.random()*1.4}s ${Math.random()*0.5}s ease-in forwards`;
+      s.style.fontSize=(14+Math.random()*16)+'px';
+      holder.appendChild(s);setTimeout(()=>s.remove(),3300);}
+  }
+
+  // ---- sound ----
+  let audioOn=true,actx=null;
+  function ac(){if(!actx){try{actx=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}}return actx;}
+  function tone(freq,dur,type,vol){if(!audioOn)return;const c=ac();if(!c)return;
+    const o=c.createOscillator(),g=c.createGain();o.type=type||'sine';o.frequency.value=freq;g.gain.value=vol||0.15;
+    o.connect(g);g.connect(c.destination);const t=c.currentTime;g.gain.setValueAtTime(g.gain.value,t);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);o.start(t);o.stop(t+dur);}
+  function sfx(k){
+    if(k==='plunk'){tone(440,0.1,'sine',0.18);setTimeout(()=>tone(300,0.16,'sine',0.16),70);}
+    else if(k==='bad'){tone(160,0.18,'sawtooth',0.12);}
+    else if(k==='win'){[523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,0.3,'triangle',0.16),i*120));}
+  }
+
+  // ---- controls ----
+  document.getElementById('reset').addEventListener('click',()=>{
+    holes.forEach(h=>{h.filled=false;h.node.querySelectorAll('path').forEach((p,i)=>{if(i>1)p.remove();});});
+    blocks.forEach(b=>{b.state='tray';b.node.classList.remove('dropping','shake');b.node.style.display='';b.node.style.opacity='';b.node.style.transformOrigin='';});
+    banner.classList.remove('show');setHint(baseHint());layout();
+  });
+  const muteBtn=document.getElementById('mute');
+  muteBtn.addEventListener('click',()=>{audioOn=!audioOn;muteBtn.textContent=audioOn?'🔊':'🔇';});
+
+  layout();
+})();
+</script>
+</body>
+</html>

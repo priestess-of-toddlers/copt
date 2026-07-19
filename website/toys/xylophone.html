@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Xylophone</title>
+<style>
+  :root{ --bg1:#fdf3ea; --bg2:#ffe6d0; --ink:#4a3b2a; }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    font-family:"Baloo 2","Nunito",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:radial-gradient(120% 120% at 50% 0%, var(--bg1), var(--bg2));
+    color:var(--ink);
+    display:flex;align-items:center;justify-content:center;min-height:100%;padding:12px;
+  }
+  .game-wrap{width:min(96vw,560px);display:flex;flex-direction:column;align-items:center;user-select:none;}
+  h1{font-size:clamp(20px,5vw,30px);margin:0 0 2px;letter-spacing:.5px;font-weight:800;}
+  .hint{margin:0 0 8px;font-size:clamp(12px,3.2vw,15px);opacity:.72;text-align:center;min-height:1.2em;}
+  .stage-holder{position:relative;width:100%;}
+  svg.stage{width:100%;height:auto;display:block;touch-action:none;overflow:visible;cursor:pointer;}
+  .mallet{transition:transform .1s ease-out;pointer-events:none;}
+  .controls{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
+  .chip{font:inherit;font-weight:800;font-size:14px;border:none;border-radius:999px;padding:8px 15px;
+    background:#fff;color:var(--ink);box-shadow:0 3px 0 #e6d6bd,0 5px 12px rgba(0,0,0,.06);cursor:pointer;
+    transition:transform .08s,box-shadow .08s,background .15s,color .15s;}
+  .chip:active{transform:translateY(2px);box-shadow:0 1px 0 #e6d6bd;}
+  .chip.active{background:#ff8a5c;color:#fff;box-shadow:0 3px 0 #d96a40,0 5px 12px rgba(217,106,64,.3);}
+  .guide .arrow{animation:gbounce .7s ease-in-out infinite;}
+  .guide .glow{animation:gpulse .9s ease-in-out infinite;}
+  @keyframes gbounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+  @keyframes gpulse{0%,100%{opacity:.3}50%{opacity:.95}}
+  .confetti{position:absolute;top:0;left:0;pointer-events:none;will-change:transform,opacity;}
+  @keyframes fall{0%{transform:translateY(-10px) rotate(0);opacity:1;}100%{transform:translateY(360px) rotate(540deg);opacity:0;}}
+</style>
+</head>
+<body>
+  <div class="game-wrap">
+    <h1>🎶 Xylophone</h1>
+    <p class="hint" id="hint">Tap the bars — or drag across them to play!</p>
+    <div class="stage-holder">
+      <svg class="stage" id="stage" viewBox="0 0 520 400" aria-label="Toy xylophone"></svg>
+    </div>
+    <div class="controls" id="controls">
+      <button class="chip active" data-song="free">🎵 Free play</button>
+      <button class="chip" data-song="twinkle">⭐ Twinkle</button>
+      <button class="chip" data-song="mary">🐑 Mary's Lamb</button>
+      <button class="chip" data-song="hotcross">🥖 Hot Cross Buns</button>
+      <button class="chip" data-song="ode">🎼 Ode to Joy</button>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const SVGNS="http://www.w3.org/2000/svg";
+  const stage=document.getElementById('stage');
+  const VIEW_W=520, VIEW_H=400;
+
+  // ---- notes / colours (low left -> high right) ----
+  const BARS=[
+    {note:'C', color:'#ec5b57', freq:261.63},
+    {note:'D', color:'#ff8f3f', freq:293.66},
+    {note:'E', color:'#ffce3f', freq:329.63},
+    {note:'F', color:'#7dd15a', freq:349.23},
+    {note:'G', color:'#37c4b4', freq:392.00},
+    {note:'A', color:'#49a6e6', freq:440.00},
+    {note:'B', color:'#6d74d6', freq:493.88},
+    {note:'C2',color:'#b25fd0', freq:523.25},
+  ];
+  const N=BARS.length;
+  const BAR_W=46, PITCH=54, CY=206, DEPTH=6;
+  const START_X=(VIEW_W-(N*BAR_W+(N-1)*(PITCH-BAR_W)))/2;   // centre the row
+  const RAIL_TOP=162, RAIL_BOT=252;
+  const H_LONG=236, H_SHORT=150;
+
+  // ---- helpers ----
+  function make(tag,attrs){const el=document.createElementNS(SVGNS,tag);for(const k in attrs)el.setAttribute(k,attrs[k]);return el;}
+  function shade(hex,f){const n=parseInt(hex.slice(1),16);let r=(n>>16)&255,g=(n>>8)&255,b=n&255;
+    r=Math.max(0,Math.min(255,Math.round(r*f)));g=Math.max(0,Math.min(255,Math.round(g*f)));b=Math.max(0,Math.min(255,Math.round(b*f)));
+    return `rgb(${r},${g},${b})`;}
+  function rr(x,y,w,h,r){return `M ${x+r} ${y} H ${x+w-r} Q ${x+w} ${y} ${x+w} ${y+r} V ${y+h-r} Q ${x+w} ${y+h} ${x+w-r} ${y+h}`
+    +` H ${x+r} Q ${x} ${y+h} ${x} ${y+h-r} V ${y+r} Q ${x} ${y} ${x+r} ${y} Z`;}
+
+  // ---- defs (per-bar gradients) ----
+  const defs=make('defs');
+  let grads='';
+  BARS.forEach((b,i)=>{grads+=`<linearGradient id="bar${i}" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="${shade(b.color,1.2)}"/>
+    <stop offset="0.5" stop-color="${b.color}"/>
+    <stop offset="1" stop-color="${shade(b.color,0.8)}"/></linearGradient>`;});
+  defs.innerHTML=grads;
+  stage.appendChild(defs);
+
+  // transparent hit surface so the whole stage receives pointer events
+  stage.appendChild(make('rect',{x:0,y:0,width:VIEW_W,height:VIEW_H,fill:'#000',opacity:0,'pointer-events':'all'}));
+
+  // ---- frame rails ----
+  const frame=make('g');
+  [RAIL_TOP,RAIL_BOT].forEach(y=>{
+    frame.appendChild(make('path',{d:rr(START_X-22,y-9,N*PITCH-(PITCH-BAR_W)+44,18,9),fill:'#c9a06a'}));
+    frame.appendChild(make('path',{d:rr(START_X-22,y-9,N*PITCH-(PITCH-BAR_W)+44,7,7),fill:'#dcb884'}));
+  });
+  stage.appendChild(frame);
+
+  // ---- bars ----
+  const barsG=make('g');
+  stage.appendChild(barsG);
+  const bars=BARS.map((b,i)=>{
+    const h=H_LONG-(H_LONG-H_SHORT)*(i/(N-1));
+    const x=START_X+i*PITCH, cx=x+BAR_W/2, top=CY-h/2, bot=CY+h/2;
+    const g=make('g');
+    const d=rr(x,top,BAR_W,h,12);
+    g.appendChild(make('path',{d:rr(x,top+DEPTH,BAR_W,h,12),fill:shade(b.color,0.6)}));   // side/underside
+    g.appendChild(make('path',{d:d,fill:`url(#bar${i})`}));                                // top face
+    g.appendChild(make('path',{d:rr(x+6,top+6,BAR_W-12,h*0.34,7),fill:'#fff',opacity:0.22})); // sheen
+    g.appendChild(make('circle',{cx:cx,cy:RAIL_TOP,r:4.2,fill:shade(b.color,0.5)}));       // pins
+    g.appendChild(make('circle',{cx:cx,cy:RAIL_BOT,r:4.2,fill:shade(b.color,0.5)}));
+    const flash=make('path',{d:d,fill:'#fff',opacity:0});                                  // strike flash
+    g.appendChild(flash);
+    barsG.appendChild(g);
+    return {...b,node:g,flash,cx,left:x,right:x+BAR_W,top,bot};
+  });
+
+  // ---- follow-along guide (glow around target bar + bouncing arrow) ----
+  const guide=make('g',{class:'guide'});guide.style.display='none';
+  const guideGlow=make('path',{class:'glow',fill:'none','stroke-width':5,'stroke-linejoin':'round'});
+  const arrowPos=make('g');const arrowG=make('g',{class:'arrow'});
+  arrowG.appendChild(make('path',{d:'M -13 -8 L 13 -8 L 0 10 Z'}));
+  arrowPos.appendChild(arrowG);guide.appendChild(guideGlow);guide.appendChild(arrowPos);
+  stage.appendChild(guide);
+
+  // ---- mallet ----
+  const mallet=make('g',{class:'mallet'});
+  mallet.appendChild(make('path',{d:'M 6 6 L 60 66',stroke:'#a9773f','stroke-width':9,'stroke-linecap':'round'}));
+  mallet.appendChild(make('circle',{cx:0,cy:0,r:14,fill:'#efe7d6',stroke:'#cfc4ad','stroke-width':2}));
+  mallet.appendChild(make('circle',{cx:-4,cy:-4,r:5,fill:'#fff',opacity:0.6}));
+  stage.appendChild(mallet);
+  const REST={x:452,y:322};
+  function moveMallet(x,y){mallet.style.transform=`translate(${x}px, ${y}px)`;}
+  moveMallet(REST.x,REST.y);
+
+  // ---- audio ----
+  let actx=null,master=null;
+  function ac(){if(!actx){try{actx=new (window.AudioContext||window.webkitAudioContext)();master=actx.createGain();master.gain.value=0.5;master.connect(actx.destination);}catch(e){}}return actx;}
+  function playNote(freq){
+    const c=ac();if(!c)return;const t=c.currentTime;
+    const g=c.createGain();g.connect(master);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.5,t+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.9);
+    [[1,0.6],[3.01,0.22],[6.2,0.08]].forEach(([mult,vol])=>{
+      const o=c.createOscillator();o.type='sine';o.frequency.value=freq*mult;
+      const og=c.createGain();og.gain.value=vol;o.connect(og);og.connect(g);
+      o.start(t);o.stop(t+0.95);
+    });
+  }
+
+  // ---- songs (sequences of bar indices; 0=C ... 7=high C) ----
+  const SONGS={
+    twinkle:{name:'Twinkle Twinkle', seq:[0,0,4,4,5,5,4, 3,3,2,2,1,1,0, 4,4,3,3,2,2,1, 4,4,3,3,2,2,1, 0,0,4,4,5,5,4, 3,3,2,2,1,1,0]},
+    mary:{name:"Mary's Lamb", seq:[2,1,0,1,2,2,2, 1,1,1, 2,4,4, 2,1,0,1,2,2,2,2, 1,1,2,1,0]},
+    hotcross:{name:'Hot Cross Buns', seq:[2,1,0, 2,1,0, 0,0,0,0, 1,1,1,1, 2,1,0]},
+    ode:{name:'Ode to Joy', seq:[2,2,3,4,4,3,2,1,0,0,1,2,2,1,1, 2,2,3,4,4,3,2,1,0,0,1,2,1,0,0]},
+  };
+  let mode='free', song=null, pos=0;
+  const hintEl=document.getElementById('hint');
+  const setHint=t=>hintEl.textContent=t;
+
+  function highlight(){
+    if(mode!=='song'||pos>=song.seq.length){guide.style.display='none';return;}
+    const b=bars[song.seq[pos]];
+    guideGlow.setAttribute('d', rr(b.left-3,b.top-3,BAR_W+6,(b.bot-b.top)+6,15));
+    guideGlow.setAttribute('stroke', shade(b.color,1.3));
+    arrowPos.setAttribute('transform',`translate(${b.cx},${b.top-24})`);
+    arrowG.firstChild.setAttribute('fill', shade(b.color,0.95));
+    guide.style.display='';
+  }
+
+  // ---- strike ----
+  function strike(i){
+    const b=bars[i];
+    playNote(b.freq);
+    b.node.animate([{transform:'translateY(0)'},{transform:'translateY(5px)'},{transform:'translateY(0)'}],
+                   {duration:170,easing:'ease-out'});
+    b.flash.animate([{opacity:0.55},{opacity:0}],{duration:320,easing:'ease-out'});
+    if(mode==='song'&&pos<song.seq.length&&i===song.seq[pos]){
+      pos++;
+      if(pos>=song.seq.length) songComplete(); else highlight();
+    }
+  }
+
+  function songComplete(){
+    guide.style.display='none';
+    setHint(`🎉 You played ${song.name}!`);
+    confetti();[0,2,4,7].forEach((n,k)=>setTimeout(()=>playNote(bars[n].freq),k*130));
+    setTimeout(()=>{if(mode==='song'){pos=0;highlight();setHint(`Follow the arrow — ${song.name}`);}},1700);
+  }
+
+  function setSong(key,btn){
+    ac();  // unlock audio on this user gesture
+    document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('active',c===btn));
+    if(key==='free'){mode='free';song=null;pos=0;guide.style.display='none';setHint('Tap the bars — or drag across them to play!');}
+    else{mode='song';song=SONGS[key];pos=0;highlight();setHint(`Follow the arrow — ${song.name}`);}
+  }
+  document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>setSong(c.dataset.song,c)));
+
+  function confetti(){
+    const holder=document.querySelector('.stage-holder');
+    const emo=['🎉','⭐','🎵','🎶','🟡','🟢','🔵','🎊'];
+    for(let i=0;i<26;i++){const s=document.createElement('div');s.className='confetti';
+      s.textContent=emo[(Math.random()*emo.length)|0];
+      s.style.left=(Math.random()*100)+'%';s.style.top='0';
+      s.style.animation=`fall ${1.4+Math.random()*1.3}s ${Math.random()*0.4}s ease-in forwards`;
+      s.style.fontSize=(14+Math.random()*16)+'px';
+      holder.appendChild(s);setTimeout(()=>s.remove(),3200);}
+  }
+  function barAt(x,y){
+    for(let i=0;i<bars.length;i++){const b=bars[i];if(x>=b.left&&x<=b.right&&y>=b.top-4&&y<=b.bot+4)return i;}
+    return -1;
+  }
+
+  // ---- pointer ----
+  function toSvg(e){const p=stage.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(stage.getScreenCTM().inverse());}
+  let playing=false,lastBar=-1;
+  function handle(p){
+    moveMallet(Math.max(14,Math.min(VIEW_W-6,p.x)),Math.max(10,Math.min(VIEW_H-6,p.y)));
+    const i=barAt(p.x,p.y);
+    if(i>=0){ if(i!==lastBar){strike(i);lastBar=i;} } else lastBar=-1;
+  }
+  stage.addEventListener('pointerdown',e=>{e.preventDefault();playing=true;lastBar=-1;handle(toSvg(e));
+    window.addEventListener('pointermove',onMove);window.addEventListener('pointerup',onUp);window.addEventListener('pointercancel',onUp);});
+  stage.addEventListener('pointermove',e=>{if(!playing){const p=toSvg(e);moveMallet(p.x,p.y);}}); // hover-follow (desktop)
+  stage.addEventListener('pointerleave',()=>{if(!playing)moveMallet(REST.x,REST.y);});           // park when the pointer leaves
+  function onMove(e){if(playing)handle(toSvg(e));}
+  function onUp(e){playing=false;lastBar=-1;
+    if(!e||e.pointerType==='touch')moveMallet(REST.x,REST.y);   // touch has no hover, so park it; mouse keeps following
+    window.removeEventListener('pointermove',onMove);window.removeEventListener('pointerup',onUp);window.removeEventListener('pointercancel',onUp);}
+})();
+</script>
+</body>
+</html>
