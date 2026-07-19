@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Animal Sounds</title>
+<style>
+  :root{ --bg1:#eaf6ff; --bg2:#d7ebff; --ink:#33413f; }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    font-family:"Baloo 2","Nunito",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:radial-gradient(120% 120% at 50% 0%, var(--bg1), var(--bg2));
+    color:var(--ink);
+    display:flex;align-items:center;justify-content:center;min-height:100%;padding:12px;
+  }
+  .game-wrap{width:min(94vw,460px);display:flex;flex-direction:column;align-items:center;user-select:none;}
+  h1{font-size:clamp(20px,5vw,30px);margin:0 0 2px;letter-spacing:.5px;font-weight:800;}
+  .hint{margin:0 0 6px;font-size:clamp(14px,3.6vw,18px);font-weight:800;text-align:center;min-height:1.4em;transition:color .2s;}
+  .stage-holder{position:relative;width:100%;}
+  svg.stage{width:100%;height:auto;display:block;touch-action:manipulation;overflow:visible;}
+  .animal,.knob{cursor:pointer;}
+  .arrow{transition:transform 2.4s cubic-bezier(.15,.72,.14,1);}
+  .confetti{position:absolute;top:0;left:0;pointer-events:none;will-change:transform,opacity;}
+  @keyframes fall{0%{transform:translateY(-10px) rotate(0);opacity:1;}100%{transform:translateY(420px) rotate(540deg);opacity:0;}}
+</style>
+</head>
+<body>
+  <div class="game-wrap">
+    <h1>🐮 Animal Sounds</h1>
+    <p class="hint" id="hint">Spin the arrow or tap an animal!</p>
+    <div class="stage-holder">
+      <svg class="stage" id="stage" viewBox="0 0 460 540" aria-label="Animal sounds spinner"></svg>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const SVGNS="http://www.w3.org/2000/svg";
+  const stage=document.getElementById('stage');
+  const hintEl=document.getElementById('hint');
+  const CX=230, CY=232, R_BODY=196, R_DIAL=166, R_ANIMAL=120, R_HUB=42;
+
+  const ANIMALS=[
+    {emoji:'🐮',name:'cow',   cap:'Moo',   sound:'moo',    color:'#ffd7d7'},
+    {emoji:'🐷',name:'pig',   cap:'Oink',  sound:'oink',   color:'#ffe0ec'},
+    {emoji:'🐱',name:'cat',   cap:'Meow',  sound:'meow',   color:'#ffe6c7'},
+    {emoji:'🐶',name:'dog',   cap:'Woof',  sound:'woof',   color:'#fff4c2'},
+    {emoji:'🐸',name:'frog',  cap:'Ribbit',sound:'ribbit', color:'#d9f2c8'},
+    {emoji:'🐑',name:'sheep', cap:'Baa',   sound:'baa',    color:'#c7f0ea'},
+    {emoji:'🦆',name:'duck',  cap:'Quack', sound:'quack',  color:'#cfe6ff'},
+    {emoji:'🐴',name:'horse', cap:'Neigh', sound:'neigh',  color:'#dcd7fb'},
+  ];
+  const N=ANIMALS.length, STEP=360/N;
+
+  function make(tag,attrs,text){const el=document.createElementNS(SVGNS,tag);for(const k in attrs)el.setAttribute(k,attrs[k]);if(text!=null)el.textContent=text;return el;}
+  const rad=d=>d*Math.PI/180;
+  const pt=(r,ang)=>[CX+r*Math.sin(rad(ang)), CY-r*Math.cos(rad(ang))];   // ang: 0=up, clockwise
+
+  const defs=make('defs');
+  defs.innerHTML=`
+    <radialGradient id="body" cx="0.42" cy="0.36" r="0.75">
+      <stop offset="0" stop-color="#ef5f4c"/><stop offset="1" stop-color="#cc4130"/></radialGradient>
+    <radialGradient id="dial" cx="0.5" cy="0.42" r="0.7">
+      <stop offset="0" stop-color="#fffaf0"/><stop offset="1" stop-color="#ffeccf"/></radialGradient>
+    <radialGradient id="hub" cx="0.42" cy="0.36" r="0.8">
+      <stop offset="0" stop-color="#5cb3f0"/><stop offset="1" stop-color="#3b8fd4"/></radialGradient>`;
+  stage.appendChild(defs);
+
+  // ground shadow + body + ring + dial
+  stage.appendChild(make('ellipse',{cx:CX,cy:CY+R_BODY-6,rx:R_BODY*0.86,ry:26,fill:'#000',opacity:0.08}));
+  stage.appendChild(make('circle',{cx:CX,cy:CY,r:R_BODY,fill:'url(#body)'}));
+  stage.appendChild(make('circle',{cx:CX,cy:CY,r:R_DIAL+16,fill:'#ffd24a'}));
+  stage.appendChild(make('circle',{cx:CX,cy:CY,r:R_DIAL,fill:'url(#dial)'}));
+
+  // wedges + dividers + animals
+  const wedges=make('g'), animalsG=make('g');
+  stage.appendChild(wedges);stage.appendChild(animalsG);
+  const animalNodes=[];
+  ANIMALS.forEach((a,i)=>{
+    const c=i*STEP, a1=c-STEP/2, a2=c+STEP/2;
+    const [x1,y1]=pt(R_DIAL,a1),[x2,y2]=pt(R_DIAL,a2);
+    wedges.appendChild(make('path',{d:`M ${CX} ${CY} L ${x1.toFixed(1)} ${y1.toFixed(1)} A ${R_DIAL} ${R_DIAL} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)} Z`,
+                                    fill:a.color,opacity:0.9}));
+    const [dx,dy]=pt(R_DIAL,a1);
+    wedges.appendChild(make('line',{x1:CX,y1:CY,x2:dx,y2:dy,stroke:'#fff','stroke-width':3,opacity:0.8}));
+    const [ax,ay]=pt(R_ANIMAL,c);
+    const g=make('g',{class:'animal'});g.setAttribute('transform',`translate(${ax.toFixed(1)},${ay.toFixed(1)})`);
+    g.appendChild(make('circle',{cx:0,cy:0,r:30,fill:'#fff',opacity:0.55}));
+    const t=make('text',{x:0,y:0,'font-size':44,'text-anchor':'middle','dominant-baseline':'central'},a.emoji);
+    g.appendChild(t);
+    g.addEventListener('pointerdown',e=>{e.preventDefault();pointTo(i);});
+    animalsG.appendChild(g);
+    animalNodes.push({g,ax,ay});
+  });
+
+  // spinning arrow (pivots on hub)
+  const arrow=make('g',{class:'arrow'});
+  const tip=CY-(R_ANIMAL-22);
+  arrow.appendChild(make('path',{d:`M ${CX} ${tip} L ${CX-17} ${CY-6} L ${CX+17} ${CY-6} Z`,fill:'#ef4b4b'}));
+  arrow.appendChild(make('path',{d:`M ${CX} ${CY+34} L ${CX-11} ${CY+4} L ${CX+11} ${CY+4} Z`,fill:'#ef4b4b'}));
+  arrow.style.transformBox='view-box';arrow.style.transformOrigin=`${CX}px ${CY}px`;
+  stage.appendChild(arrow);
+  // hub on top of arrow base
+  stage.appendChild(make('circle',{cx:CX,cy:CY,r:R_HUB,fill:'url(#hub)'}));
+  stage.appendChild(make('circle',{cx:CX,cy:CY,r:R_HUB-10,fill:'#fff',opacity:0.18}));
+
+  // spin knob
+  const knob=make('g',{class:'knob'});
+  const ky=CY+R_BODY+72;
+  knob.appendChild(make('rect',{x:CX-9,y:CY+R_BODY-10,width:18,height:84,rx:9,fill:'#c9a06a'}));
+  const kc=make('g');kc.setAttribute('transform',`translate(${CX},${ky})`);
+  kc.appendChild(make('circle',{cx:0,cy:0,r:34,fill:'#ffd24a',stroke:'#e6b52f','stroke-width':3}));
+  kc.appendChild(make('text',{x:0,y:1,'font-size':30,'text-anchor':'middle','dominant-baseline':'central'},'🖐️'));
+  knob.appendChild(kc);
+  stage.appendChild(knob);
+  knob.addEventListener('pointerdown',e=>{e.preventDefault();
+    kc.animate([{transform:`translate(${CX}px,${ky}px)`},{transform:`translate(${CX}px,${ky+10}px)`},{transform:`translate(${CX}px,${ky}px)`}],{duration:260,easing:'ease-out'});
+    randomSpin();});
+
+  // ---- behaviour ----
+  const setHint=(t,c)=>{hintEl.textContent=t;hintEl.style.color=c||'';};
+  let rotation=0, spinning=false, spinTimer=null;
+  function animate(target,dur){
+    rotation=target;
+    arrow.style.transition=`transform ${dur}s cubic-bezier(.15,.72,.14,1)`;
+    arrow.style.transform=`rotate(${rotation}deg)`;
+  }
+  function landOn(i,dur){
+    spinning=true;setHint('…');
+    clearTimeout(spinTimer);
+    spinTimer=setTimeout(()=>{spinning=false;announce(i);},dur*1000+60);
+  }
+  function randomSpin(){
+    if(spinning)return;const i=(Math.random()*N)|0;
+    const base=Math.ceil((rotation+1)/360)*360;
+    animate(base+360*3+i*STEP,2.4);landOn(i,2.4);
+  }
+  function pointTo(i){
+    if(spinning)return;
+    let target=Math.round(rotation/360)*360+i*STEP;
+    while(target<=rotation+1)target+=360;
+    if(target-rotation>360)target-=360;
+    const dur=0.7;animate(target,dur);landOn(i,dur);
+  }
+  function announce(i){
+    const a=ANIMALS[i];
+    setHint(`${a.emoji}  The ${a.name} says ${a.cap}!`, '#e0492f');
+    const n=animalNodes[i];
+    n.g.animate([{transform:`translate(${n.ax}px,${n.ay}px) scale(1)`},
+                 {transform:`translate(${n.ax}px,${n.ay}px) scale(1.45)`},
+                 {transform:`translate(${n.ax}px,${n.ay}px) scale(1)`}],{duration:700,easing:'ease-out'});
+    playSound(a.name);
+  }
+
+  // ---- animal sounds (drop-in files) ----
+  // Drop real clips in a "sounds" folder next to this file, one per animal:
+  //   sounds/cow.mp3  sounds/pig.mp3  sounds/cat.mp3   sounds/dog.mp3
+  //   sounds/frog.mp3 sounds/sheep.mp3 sounds/duck.mp3 sounds/horse.mp3
+  // mp3 / ogg / wav / m4a all work. Any missing file falls back to a soft placeholder tone.
+  const SOUND_DIR='../sounds/', SOUND_EXTS=['mp3','ogg','wav','m4a'];  // all 8 animals wired
+  const audioFiles={};
+  ANIMALS.forEach(a=>{(function tryExt(i){
+    if(i>=SOUND_EXTS.length)return;
+    const el=new Audio();el.preload='auto';el.src=`${SOUND_DIR}${a.name}.${SOUND_EXTS[i]}`;
+    el.addEventListener('canplaythrough',()=>{if(!audioFiles[a.name])audioFiles[a.name]=el;},{once:true});
+    el.addEventListener('error',()=>tryExt(i+1),{once:true});
+  })(0);});
+
+  let ctx=null,master=null;
+  function ac(){if(!ctx){try{ctx=new (window.AudioContext||window.webkitAudioContext)();master=ctx.createGain();master.gain.value=0.5;master.connect(ctx.destination);}catch(e){}}if(ctx&&ctx.state==='suspended')ctx.resume();return ctx;}
+  function blip(name){const c=ac();if(!c)return;const t=c.currentTime;
+    const i=Math.max(0,ANIMALS.findIndex(a=>a.name===name)),freq=392*Math.pow(2,(i*2)/12);
+    const g=c.createGain();g.connect(master);g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.4,t+0.01);g.gain.exponentialRampToValueAtTime(0.001,t+0.4);
+    const o=c.createOscillator();o.type='triangle';o.frequency.value=freq;o.connect(g);o.start(t);o.stop(t+0.42);}
+  function playSound(name){
+    const f=audioFiles[name];
+    if(f){try{const c=f.cloneNode(true);c.volume=1;c.play().catch(()=>{});}catch(e){try{f.currentTime=0;f.play();}catch(_){}}return;}
+    blip(name);   // soft placeholder tone until a real clip is added
+  }
+})();
+</script>
+</body>
+</html>

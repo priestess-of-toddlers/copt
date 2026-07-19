@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Stacking Rings</title>
+<style>
+  :root{ --bg1:#fef6e4; --bg2:#ffe8cf; --ink:#4a3b2a; }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    font-family:"Baloo 2","Nunito",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:radial-gradient(120% 120% at 50% 0%, var(--bg1), var(--bg2));
+    color:var(--ink);
+    display:flex;align-items:center;justify-content:center;min-height:100%;padding:12px;
+  }
+  .game-wrap{width:min(94vw,480px);display:flex;flex-direction:column;align-items:center;user-select:none;}
+  h1{font-size:clamp(20px,5vw,30px);margin:0 0 2px;letter-spacing:.5px;font-weight:800;}
+  .hint{margin:0 0 8px;font-size:clamp(12px,3.2vw,15px);opacity:.75;text-align:center;min-height:1.2em;transition:color .2s;}
+  .hint.bad{color:#e0492f;font-weight:700;opacity:1;}
+  .hint.good{color:#2fa14f;font-weight:700;opacity:1;}
+  .stage-holder{position:relative;width:100%;}
+  svg.stage{width:100%;height:auto;display:block;touch-action:none;overflow:visible;}
+  .ring{cursor:grab;transition:transform .28s cubic-bezier(.34,1.56,.64,1);}
+  .ring.grabbing{cursor:grabbing;transition:none;}
+  .ring,.ring *{-webkit-user-drag:none;}
+  .controls{margin-top:10px;display:flex;gap:10px;align-items:center;}
+  button{font:inherit;font-weight:800;border:none;border-radius:999px;padding:9px 18px;
+    background:#ff8a5c;color:#fff;box-shadow:0 4px 0 #d96a40,0 6px 14px rgba(217,106,64,.35);
+    cursor:pointer;transition:transform .08s,box-shadow .08s;}
+  button:active{transform:translateY(3px);box-shadow:0 1px 0 #d96a40,0 3px 8px rgba(217,106,64,.35);}
+  button.ghost{background:#fff;color:var(--ink);box-shadow:0 4px 0 #e6d6bd,0 6px 14px rgba(0,0,0,.06);}
+  button.ghost:active{box-shadow:0 1px 0 #e6d6bd;}
+  .banner{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity .35s;}
+  .banner.show{opacity:1;}
+  .banner .card{background:#fff;border-radius:22px;padding:18px 26px;text-align:center;box-shadow:0 12px 34px rgba(0,0,0,.18);
+    transform:scale(.6);transition:transform .45s cubic-bezier(.34,1.56,.64,1);}
+  .banner.show .card{transform:scale(1);}
+  .banner .card .big{font-size:34px;}
+  .banner .card .txt{font-weight:800;font-size:20px;margin-top:4px;}
+  .confetti{position:absolute;top:0;left:0;pointer-events:none;will-change:transform,opacity;}
+  @keyframes fall{0%{transform:translateY(-10px) rotate(0);opacity:1;}100%{transform:translateY(380px) rotate(540deg);opacity:0;}}
+</style>
+</head>
+<body>
+  <div class="game-wrap">
+    <h1>🌈 Stacking Rings</h1>
+    <p class="hint" id="hint">Stack the rings biggest to smallest so they all fit!</p>
+    <div class="stage-holder">
+      <svg class="stage" id="stage" viewBox="0 0 440 515" aria-label="Stacking ring toy"></svg>
+      <div class="banner" id="banner">
+        <div class="card"><div class="big">🎉🥳🎉</div><div class="txt">You did it!</div></div>
+      </div>
+    </div>
+    <div class="controls">
+      <button id="reset" class="ghost">↺ Reset</button>
+      <button id="mute" class="ghost" title="Toggle sound">🔊</button>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const SVGNS="http://www.w3.org/2000/svg";
+  const stage=document.getElementById('stage');
+  const hintEl=document.getElementById('hint');
+  const banner=document.getElementById('banner');
+
+  // ---- Scene geometry (SVG user units) ----
+  const VIEW_W=440, VIEW_H=515;
+  const PEG_X=220;
+  const PEG_BOTTOM_Y=332, PEG_TOP_Y=140;   // peg tip (top) -> base (bottom)
+  const PEG_THW=13, PEG_BHW=40;            // peg half-width at tip / base
+  const PLAT_CY=340, PLAT_RX=152, PLAT_RY=42;
+  const STACK_THICK=30;                    // vertical thickness when a ring rests on another
+  const CAPTURE_MIN_Y=PEG_TOP_Y+8;         // above this (smaller Y) the peg can't hold a ring -> it slides off
+  const RING_FLAT=0.30;                    // ellipse squash (perspective)
+  const HOLE_RATIO=0.38;                   // hole radius as fraction of ring radius
+  const TUBE_H=0.6;                        // tube height as fraction of ring radius -> "fatness"
+
+  // rings, biggest -> smallest
+  const RING_DEFS=[
+    {rx:98, color:'#f0544f'},
+    {rx:82, color:'#f59f3d'},
+    {rx:67, color:'#f6d13c'},
+    {rx:53, color:'#5cc46a'},
+    {rx:40, color:'#4aa6e8'},
+  ];
+  const HOMES=[{x:225,y:404},{x:110,y:392},{x:345,y:394},{x:152,y:414},{x:298,y:416}];
+
+  // ---- helpers ----
+  function shade(hex,f){
+    const n=parseInt(hex.slice(1),16);
+    let r=(n>>16)&255,g=(n>>8)&255,b=n&255;
+    r=Math.max(0,Math.min(255,Math.round(r*f)));
+    g=Math.max(0,Math.min(255,Math.round(g*f)));
+    b=Math.max(0,Math.min(255,Math.round(b*f)));
+    return `rgb(${r},${g},${b})`;
+  }
+  const ell=(cx,cy,rx,ry)=>`M ${cx-rx} ${cy} a ${rx} ${ry} 0 1 0 ${2*rx} 0 a ${rx} ${ry} 0 1 0 ${-2*rx} 0 Z`;
+  const annulus=(cx,cy,rx,ry,hx,hy)=>ell(cx,cy,rx,ry)+' '+ell(cx,cy,hx,hy);
+  function make(tag,attrs){const el=document.createElementNS(SVGNS,tag);for(const k in attrs)el.setAttribute(k,attrs[k]);return el;}
+  function shuffle(a){for(let i=a.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[a[i],a[j]]=[a[j],a[i]];}return a;}
+  // height on the peg where a hole of half-width h comes to rest on the bare cone
+  const seatForHole=h=>PEG_TOP_Y+(h-PEG_THW)/(PEG_BHW-PEG_THW)*(PEG_BOTTOM_Y-PEG_TOP_Y);
+
+  // ---- defs: peg / platform gradients + front-half clip ----
+  const defs=make('defs');
+  defs.innerHTML=`
+    <linearGradient id="pegGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e0b565"/><stop offset="0.45" stop-color="#f4d99a"/><stop offset="1" stop-color="#c8973f"/>
+    </linearGradient>
+    <radialGradient id="platGrad" cx="0.5" cy="0.35" r="0.75">
+      <stop offset="0" stop-color="#bfe6f2"/><stop offset="1" stop-color="#8ccfe6"/>
+    </radialGradient>
+    <filter id="softShadow" x="-40%" y="-40%" width="180%" height="220%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="frontClip"><rect x="-320" y="0" width="640" height="540"/></clipPath>`;
+  stage.appendChild(defs);
+
+  // ---- scene layers: platform -> ring backs -> cone -> ring fronts ----
+  const baseG=make('g');
+  baseG.appendChild(make('ellipse',{cx:PEG_X,cy:PLAT_CY+16,rx:PLAT_RX,ry:PLAT_RY,fill:'#5aa8c4'}));
+  baseG.appendChild(make('ellipse',{cx:PEG_X,cy:PLAT_CY,rx:PLAT_RX,ry:PLAT_RY,fill:'url(#platGrad)'}));
+  baseG.appendChild(make('ellipse',{cx:PEG_X,cy:PLAT_CY-6,rx:PLAT_RX*0.82,ry:PLAT_RY*0.7,fill:'#fff',opacity:0.18}));
+  stage.appendChild(baseG);
+
+  const layerBack=make('g');   // far (back) halves of rings, behind the cone
+  stage.appendChild(layerBack);
+
+  const pegG=make('g');
+  const pegPath=`M ${PEG_X-PEG_BHW} ${PEG_BOTTOM_Y}
+                 L ${PEG_X-PEG_THW} ${PEG_TOP_Y}
+                 Q ${PEG_X} ${PEG_TOP_Y-10} ${PEG_X+PEG_THW} ${PEG_TOP_Y}
+                 L ${PEG_X+PEG_BHW} ${PEG_BOTTOM_Y} Z`;
+  pegG.appendChild(make('path',{d:pegPath,fill:'url(#pegGrad)'}));
+  pegG.appendChild(make('path',{d:`M ${PEG_X-3} ${PEG_BOTTOM_Y-6} L ${PEG_X-1.5} ${PEG_TOP_Y}`,
+                                stroke:'#fff','stroke-width':3,'stroke-linecap':'round',opacity:0.3,fill:'none'}));
+  pegG.appendChild(make('ellipse',{cx:PEG_X,cy:PEG_TOP_Y-2,rx:PEG_THW,ry:PEG_THW*0.7,fill:'#f4d99a'}));
+  stage.appendChild(pegG);
+
+  const layerFront=make('g');  // near (front) halves of rings, in front of the cone + loose/dragged rings
+  stage.appendChild(layerFront);
+
+  // ---- a rounded-tube (torus) look: concentric shading bands, no offset "second disk" ----
+  // A fat 3D ring: a SOLID rounded body (thick, with rounded top/bottom edges) with ONE
+  // clean elliptical hole punched straight through it. No lathed inner wall, so the hole
+  // reads as a clean round opening and the peg cut-out follows the round hole edge.
+  // Origin (0,0) is the centre of the tube (the widest point of the hole).
+  let _uid=0;
+  function buildTube(R,color,H){
+    const g=make('g'), k=RING_FLAT, r=R*HOLE_RATIO;
+    const m=(R+r)/2, a=(R-r)/2, half=H/2, n=2.8;   // n: profile plumpness (2=ellipse, higher=fuller)
+    const hdy=half*0.19;                            // raise the cut-out to line up with the crown ridge
+    // clip = everything OUTSIDE a clean elliptical hole of radius r
+    const cid='hole'+(_uid++);
+    const cp=make('clipPath',{id:cid});
+    cp.appendChild(make('path',{d:`M -520 -520 H 520 V 520 H -520 Z `+ell(0,-hdy,r,r*k),'clip-rule':'evenodd'}));
+    defs.appendChild(cp);
+    // hit-area (UNclipped) so the whole ring incl. the open hole is grabbable
+    g.appendChild(make('ellipse',{cx:0,cy:0,rx:R,ry:R*k+half,fill:'none','pointer-events':'all'}));
+    const bg=make('g',{'clip-path':`url(#${cid})`});
+    // 1) fat rounded BODY (outer wall + underside), shaded dark(bottom)->light(top)
+    const step=1.8;
+    for(let y=half;y>=-half-0.001;y-=step){
+      const prof=Math.pow(Math.max(0,1-Math.pow(Math.abs(y)/half,n)),1/n);   // rounded-rect side profile
+      const oR=m+a*prof, tN=(half-y)/H;
+      bg.appendChild(make('path',{d:ell(0,y,oR,oR*k),fill:shade(color,0.46+0.46*tN)}));
+    }
+    // 2) TOP as a rounded tube: concentric bands rising from the outer edge up to a bright
+    //    crown ridge (radius m) and back down into the hole -> "up and over", not a bowl.
+    const NB=120, dRr=R-r;
+    for(let j=0;j<=NB;j++){
+      const rho=R-dRr*(j/NB);
+      const dr=(rho-m)/a;                          // +1 outer edge .. 0 crown .. -1 hole edge
+      const domeF=Math.sqrt(Math.max(0,1-dr*dr)); // 0 at both edges .. 1 at the crown ridge
+      const yoff=-domeF*half;                      // the ridge sits at the top of the tube
+      let bright=0.6+0.6*domeF;                    // crown ridge is brightest
+      if(dr<0) bright*=(0.72+0.28*domeF);          // inner slope falls into shadow toward the hole
+      const w2=dRr/NB*1.6, oR=rho+w2*0.5, iR=Math.max(r,rho-w2*0.5);
+      bg.appendChild(make('path',{d:annulus(0,yoff,oR,oR*k,iR,iR*k),'fill-rule':'evenodd',fill:shade(color,bright)}));
+    }
+    // soft crown sheen + a little hole-edge depth
+    bg.appendChild(make('path',{d:ell(0,-half*0.7,m,m*k),fill:'none',stroke:'#fff','stroke-width':2.2,opacity:0.16}));
+    bg.appendChild(make('path',{d:ell(0,-hdy,r,r*k),fill:'none',stroke:'#000','stroke-width':2.5,opacity:0.13}));
+    g.appendChild(bg);
+    return g;
+  }
+
+  // ---- rings: each has a full body (back) and a clipped clone (front, in front of cone) ----
+  const trayOrder=shuffle(RING_DEFS.map((_,i)=>i));
+  const rings=RING_DEFS.map((def,i)=>{
+    const R=def.rx, ry=R*RING_FLAT, H=Math.max(9,Math.round(R*TUBE_H));
+    // body = cast shadow + tube
+    const body=make('g',{class:'ring'});
+    body.appendChild(make('ellipse',{cx:0,cy:H/2+ry*0.6,rx:R*0.92,ry:ry*0.5,fill:'#000',opacity:0.13}));
+    body.appendChild(buildTube(R,def.color,H));
+    // front clone = same tube, clipped to its lower (near) half, drawn over the cone
+    const front=make('g',{class:'ring'});
+    const frontInner=make('g',{'clip-path':'url(#frontClip)'});
+    frontInner.appendChild(buildTube(R,def.color,H));
+    front.appendChild(frontInner);
+
+    const ring={id:i,size:R,hole:R*HOLE_RATIO,seatY:seatForHole(R*HOLE_RATIO),
+                body,front,state:'tray',restY:0,cx:0,cy:0,home:HOMES[trayOrder.indexOf(i)]};
+    body.addEventListener('pointerdown',e=>onDown(e,ring));
+    front.addEventListener('pointerdown',e=>onDown(e,ring));
+    return ring;
+  });
+
+  // ---- layout / render ----
+  function setT(r){const t=`translate(${r.cx}px, ${r.cy}px)`;r.body.style.transform=t;r.front.style.transform=t;}
+  const placedRings=excl=>rings.filter(r=>r.state==='placed'&&!(excl&&r===dragging));
+  function layout(){
+    const placed=placedRings(false);
+    placed.forEach(r=>{r.cx=PEG_X;r.cy=r.restY;});
+    rings.filter(r=>r.state==='tray').forEach(r=>{r.cx=r.home.x;r.cy=r.home.y;});
+    rings.forEach(r=>{if(r!==dragging)setT(r);});
+    // placed, bottom (largest Y) first -> top last
+    const placedSorted=placed.slice().sort((a,b)=>b.restY-a.restY);
+    // BACK layer: placed bodies (cone will be drawn over their far halves)
+    placedSorted.forEach(r=>layerBack.appendChild(r.body));
+    // FRONT layer: placed near-halves, then loose tray rings (full body), then the dragged ring on top
+    placedSorted.forEach(r=>layerFront.appendChild(r.front));
+    rings.filter(r=>r.state==='tray').sort((a,b)=>b.size-a.size)
+         .forEach(r=>{if(r.front.parentNode)r.front.remove();layerFront.appendChild(r.body);});
+    rings.filter(r=>r.state==='dragging')
+         .forEach(r=>{if(r.front.parentNode)r.front.remove();layerFront.appendChild(r.body);});
+  }
+
+  // ---- physics ----
+  // where would this ring come to rest, given the rings already on the peg?
+  function restHeightFor(ring){
+    const others=placedRings(true);
+    const topY=others.length?Math.min(...others.map(r=>r.restY)):Infinity; // highest ring already on
+    const topSurface=isFinite(topY)?topY-STACK_THICK:Infinity;
+    return Math.min(ring.seatY,topSurface); // stops at its cone-seat, or on top of what's there
+  }
+  const isNested=()=>rings.every(r=>r.state==='placed'&&Math.abs(r.restY-r.seatY)<4);
+
+  // ---- dragging ----
+  let dragging=null,grabDX=0,grabDY=0;
+  function toSvg(e){const p=stage.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(stage.getScreenCTM().inverse());}
+  function isDraggable(ring){
+    if(ring.state==='tray')return true;
+    if(ring.state==='placed'){const p=placedRings(false);return p.length&&p.reduce((a,b)=>a.restY<b.restY?a:b)===ring;} // only the highest ring lifts off
+    return false;
+  }
+  function onDown(e,ring){
+    if(dragging||!isDraggable(ring))return;
+    e.preventDefault();
+    dragging=ring;ring.state='dragging';
+    ring.body.classList.add('grabbing');
+    const p=toSvg(e);grabDX=ring.cx-p.x;grabDY=ring.cy-p.y;
+    layout();
+    window.addEventListener('pointermove',onMove);
+    window.addEventListener('pointerup',onUp);
+    window.addEventListener('pointercancel',onUp);
+  }
+  function onMove(e){
+    if(!dragging)return;
+    const p=toSvg(e);
+    dragging.cx=Math.max(20,Math.min(VIEW_W-20,p.x+grabDX));
+    dragging.cy=Math.max(20,Math.min(VIEW_H-20,p.y+grabDY));
+    setT(dragging);
+  }
+  function onUp(){
+    if(!dragging)return;
+    const ring=dragging;
+    window.removeEventListener('pointermove',onMove);
+    window.removeEventListener('pointerup',onUp);
+    window.removeEventListener('pointercancel',onUp);
+    ring.body.classList.remove('grabbing');ring.front.classList.remove('grabbing');
+
+    const overPeg=Math.abs(ring.cx-PEG_X)<105 && ring.cy>110 && ring.cy<PEG_BOTTOM_Y+15;
+    if(overPeg){
+      const rest=restHeightFor(ring);
+      if(rest>=CAPTURE_MIN_Y){
+        // it settles on the peg — maybe perfectly seated, maybe perched on a wrong ring
+        ring.state='placed';ring.restY=rest;dragging=null;layout();
+        const perched=Math.abs(rest-ring.seatY)>=4;
+        sfx(perched?'perch':'place');
+        afterPlace(perched);
+        return;
+      } else {
+        // no peg left up there — it slides back off
+        ring.state='tray';dragging=null;layout();sfx('bad');
+        flashHint('It slid off the top — no room! Build biggest → smallest.');
+        return;
+      }
+    }
+    ring.state='tray';dragging=null;layout();
+  }
+
+  // ---- hints / win ----
+  function remaining(){return rings.filter(r=>r.state!=='placed').length;}
+  function baseHint(){
+    const left=remaining();
+    if(left===rings.length)return 'Stack the rings biggest to smallest so they all fit!';
+    return `${rings.length-left} on — keep going, next one smaller.`;
+  }
+  function setHint(t,cls){hintEl.textContent=t;hintEl.className='hint'+(cls?' '+cls:'');}
+  let hintTimer=null;
+  function flashHint(t){clearTimeout(hintTimer);setHint(t,'bad');hintTimer=setTimeout(()=>setHint(baseHint()),1900);}
+  function afterPlace(perched){
+    if(remaining()===0){
+      if(isNested())win();
+      else{setHint('So close — but they’re out of order and won’t nest. Lift the top ring and retry.','bad');}
+      return;
+    }
+    if(perched)flashHint('That one’s perched on a smaller ring — it’ll block the rest!');
+    else setHint(baseHint());
+  }
+  function win(){setHint('You stacked them all in order! 🌈','good');banner.classList.add('show');sfx('win');confetti();}
+  function confetti(){
+    const holder=document.querySelector('.stage-holder');
+    const emo=['🎉','⭐','🌈','✨','🎊','💛','💙','❤️'];
+    for(let i=0;i<30;i++){
+      const s=document.createElement('div');s.className='confetti';
+      s.textContent=emo[(Math.random()*emo.length)|0];
+      s.style.left=(Math.random()*100)+'%';s.style.top='0';
+      s.style.animation=`fall ${1.4+Math.random()*1.4}s ${Math.random()*0.5}s ease-in forwards`;
+      s.style.fontSize=(14+Math.random()*16)+'px';
+      holder.appendChild(s);setTimeout(()=>s.remove(),3300);
+    }
+  }
+
+  // ---- sound ----
+  let audioOn=true,actx=null;
+  function ac(){if(!actx){try{actx=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}}return actx;}
+  function tone(freq,dur,type,vol){
+    if(!audioOn)return;const c=ac();if(!c)return;
+    const o=c.createOscillator(),g=c.createGain();
+    o.type=type||'sine';o.frequency.value=freq;g.gain.value=vol||0.15;
+    o.connect(g);g.connect(c.destination);
+    const t=c.currentTime;g.gain.setValueAtTime(g.gain.value,t);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.start(t);o.stop(t+dur);
+  }
+  function sfx(k){
+    if(k==='place'){tone(520,0.12,'triangle',0.18);setTimeout(()=>tone(680,0.1,'triangle',0.14),40);}
+    else if(k==='perch'){tone(300,0.14,'triangle',0.14);}
+    else if(k==='bad'){tone(170,0.2,'sawtooth',0.12);}
+    else if(k==='win'){[523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,0.3,'triangle',0.16),i*120));}
+  }
+
+  // ---- controls ----
+  document.getElementById('reset').addEventListener('click',()=>{
+    rings.forEach(r=>{r.state='tray';r.restY=0;});
+    banner.classList.remove('show');setHint(baseHint());layout();
+  });
+  const muteBtn=document.getElementById('mute');
+  muteBtn.addEventListener('click',()=>{audioOn=!audioOn;muteBtn.textContent=audioOn?'🔊':'🔇';});
+
+  layout();
+})();
+</script>
+</body>
+</html>
